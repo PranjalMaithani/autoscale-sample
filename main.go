@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"log"
 
 	"github.com/gofrs/uuid"
 )
@@ -34,6 +35,10 @@ func logRequest(r *http.Request) {
 }
 
 func main() {
+	if os.Getenv("FORCE_PANIC") != "" {
+		log.Println("panicking")
+		panic("hello")
+	}
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		logRequest(r)
 		fmt.Fprintf(w, "Hello! you've requested %s\n", r.URL.Path)
