@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -163,7 +162,7 @@ func main() {
 	// Add database health check endpoint
 	http.HandleFunc("/db-health", func(w http.ResponseWriter, r *http.Request) {
 		logRequest(r)
-		
+
 		db, err := getDBConnection()
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Database connection error: %v", err), http.StatusServiceUnavailable)
