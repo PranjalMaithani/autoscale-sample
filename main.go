@@ -1,14 +1,19 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
-	"log"
+	"time"
 
 	"github.com/gofrs/uuid"
+	_ "github.com/lib/pq"
 )
 
 const startupMessage = `[38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;54;48;5;39m [38;5;54;48;5;39m [38;5;54;48;5;39m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [38;5;1;48;5;16m [0m
@@ -32,6 +37,31 @@ func logRequest(r *http.Request) {
 	uri := r.RequestURI
 	method := r.Method
 	fmt.Println("Got request!", method, uri)
+}
+
+// getDBConnection creates a new database connection using DATABASE_URL environment variable
+func getDBConnection() (*sql.DB, error) {
+	dbURL := os.Getenv("DATABASE_URL")
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		return nil, fmt.Errorf("error connecting to database: %v", err)
+	}
+
+	// Set connection pool settings
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(25)
+	db.SetConnMaxLifetime(5 * time.Minute)
+
+	// Test the connection
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := db.PingContext(ctx); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("error pinging database: %v", err)
+	}
+
+	return db, nil
 }
 
 func main() {
@@ -130,6 +160,34 @@ func main() {
 		fmt.Println(line)
 	}
 	fmt.Println()
+	// Add database health check endpoint
+	http.HandleFunc("/db-health", func(w http.ResponseWriter, r *http.Request) {
+		logRequest(r)
+		
+		db, err := getDBConnection()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Database connection error: %v", err), http.StatusServiceUnavailable)
+			return
+		}
+		defer db.Close()
+
+		// Execute a simple query to verify the connection
+		var result int
+		err = db.QueryRow("SELECT 1").Scan(&result)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Database query error: %v", err), http.StatusServiceUnavailable)
+			return
+		}
+
+		if result != 1 {
+			http.Error(w, "Unexpected query result", http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "Database connection successful!\n")
+	})
+
 	fmt.Printf("==> Server listening at %s 🚀\n", bindAddr)
 
 	err := http.ListenAndServe(fmt.Sprintf(":%s", port), nil)
