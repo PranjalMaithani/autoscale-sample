@@ -136,6 +136,36 @@ func main() {
 		fmt.Fprint(w, requestID.String())
 	})
 
+	http.HandleFunc("/panic", func(w http.ResponseWriter, r *http.Request) {
+		panic("/panic called")
+	})
+
+	http.HandleFunc("/exit", func(w http.ResponseWriter, r *http.Request) {
+		codeStr := r.URL.Query().Get("code")
+	
+		if codeStr == "" {
+			http.Error(w, "missing 'code' query parameter", http.StatusBadRequest)
+			return
+		}
+	
+		code, err := strconv.Atoi(codeStr)
+		if err != nil {
+			http.Error(w, "invalid 'code' query parameter", http.StatusBadRequest)
+			return
+		}
+	
+		// Optional: write response before exiting
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Exiting with code " + codeStr))
+	
+		// Important: ensure response is flushed before exit (best effort)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+	
+		os.Exit(code)
+	})
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "80"
