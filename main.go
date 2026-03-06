@@ -68,6 +68,39 @@ func main() {
 		log.Println("panicking")
 		panic("hello")
 	}
+
+	if strings.EqualFold(os.Getenv("ENABLE_MIGRATE"), "true") {
+		log.Println("ENABLE_MIGRATE is true, running migrations...")
+		db, err := getDBConnection()
+		if err != nil {
+			log.Fatalf("migration: failed to connect to database: %v", err)
+		}
+		_, err = db.Exec(`CREATE TABLE IF NOT EXISTS kv (key TEXT NOT NULL, value TEXT NOT NULL)`)
+		if err != nil {
+			db.Close()
+			log.Fatalf("migration: failed to create kv table: %v", err)
+		}
+		log.Println("migration: kv table ready")
+		db.Close()
+	}
+
+	if strings.EqualFold(os.Getenv("CHECK_CRASH"), "true") {
+		log.Println("CHECK_CRASH is true, checking crash flag...")
+		db, err := getDBConnection()
+		if err != nil {
+			log.Fatalf("check_crash: failed to connect to database: %v", err)
+		}
+		var value string
+		err = db.QueryRow(`SELECT value FROM kv WHERE key = 'crash'`).Scan(&value)
+		db.Close()
+		if err == nil && strings.EqualFold(value, "true") {
+			panic("crash flag is set to true in kv table")
+		}
+		if err != nil && err != sql.ErrNoRows {
+			log.Printf("check_crash: error querying kv table: %v", err)
+		}
+	}
+
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		logRequest(r)
 		fmt.Fprintf(w, "Hello! you've requested %s\n", r.URL.Path)
@@ -142,27 +175,27 @@ func main() {
 
 	http.HandleFunc("/exit", func(w http.ResponseWriter, r *http.Request) {
 		codeStr := r.URL.Query().Get("code")
-	
+
 		if codeStr == "" {
 			http.Error(w, "missing 'code' query parameter", http.StatusBadRequest)
 			return
 		}
-	
+
 		code, err := strconv.Atoi(codeStr)
 		if err != nil {
 			http.Error(w, "invalid 'code' query parameter", http.StatusBadRequest)
 			return
 		}
-	
+
 		// Optional: write response before exiting
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Exiting with code " + codeStr))
-	
+
 		// Important: ensure response is flushed before exit (best effort)
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}
-	
+
 		os.Exit(code)
 	})
 
