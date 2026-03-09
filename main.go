@@ -92,6 +92,7 @@ func main() {
 		}
 		var value string
 		err = db.QueryRow(`SELECT value FROM kv WHERE key = 'crash'`).Scan(&value)
+		log.Println("CHECK value", value)
 		db.Close()
 		if err == nil && strings.EqualFold(value, "true") {
 			panic("crash flag is set to true in kv table")
