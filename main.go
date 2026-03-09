@@ -41,8 +41,10 @@ func logRequest(r *http.Request) {
 // getDBConnection creates a new database connection using DATABASE_URL environment variable
 func getDBConnection() (*sql.DB, error) {
 	dbURL := os.Getenv("DATABASE_URL")
+	log.Println("DATABASE URL ", os.Getenv("DATABASE_URL"))
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
+		log.Println("Connected to DB")
 		return nil, fmt.Errorf("error connecting to database: %v", err)
 	}
 
@@ -91,14 +93,18 @@ func main() {
 			log.Fatalf("check_crash: failed to connect to database: %v", err)
 		}
 		var value string
+
 		err = db.QueryRow(`SELECT value FROM kv WHERE key = 'crash'`).Scan(&value)
-		log.Println("CHECK value", value)
 		db.Close()
-		if err == nil && strings.EqualFold(value, "true") {
-			panic("crash flag is set to true in kv table")
-		}
-		if err != nil && err != sql.ErrNoRows {
+		if err == sql.ErrNoRows {
+			log.Println("check_crash: no 'crash' key found in kv table")
+		} else if err != nil {
 			log.Printf("check_crash: error querying kv table: %v", err)
+		} else {
+			log.Printf("check_crash: crash key value=%q", value)
+			if strings.EqualFold(value, "true") {
+				panic("crash flag is set to true in kv table")
+			}
 		}
 	}
 
