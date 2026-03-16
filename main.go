@@ -87,6 +87,8 @@ func main() {
 	}
 
 	if strings.EqualFold(os.Getenv("CHECK_CRASH"), "true") {
+		log.Println("check_crash: sleeping for 60 seconds to simulate scale-up delay...")
+		time.Sleep(60 * time.Second)
 		log.Println("CHECK_CRASH is true, checking crash flag...")
 		log.Printf("check_crash: connecting to DATABASE_URL=%s", os.Getenv("DATABASE_URL"))
 		db, err := getDBConnection()
@@ -262,7 +264,7 @@ func main() {
 		fmt.Fprintf(w, "Database connection successful!\n")
 	})
 
-	fmt.Printf("==> Server listening at %s 🚀\n", bindAddr)
+	fmt.Printf("==> Server listening at %s =�\n", bindAddr)
 
 	err := http.ListenAndServe(fmt.Sprintf(":%s", port), nil)
 	if err != nil {
